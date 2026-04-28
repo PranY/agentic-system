@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Per-user / per-machine state — regenerate via setup.sh
+system_config.json
+model_selection.json
+
+# Claude Code per-user settings (contains local paths / preferences)
+.claude/settings.local.json
+.claude/
+
+# Internal working notes (not for public repo)
+suggestion.md
+architecture.md
+mlx_parallelism_issue.md
+
+# Personal social media drafts
+post.md
+linkedin_post.md
+
+# Logs and temp output
+*.log
+/tmp/
+logs/
+*.pid
+
+# Experiments dir — internal R&D, regenerate when needed
+experiments/
+
+# Local Hermes config — users copy from hermes-config.yaml.example
+hermes-config.yaml
+~/.hermes/
+
+# Downloaded models live in HF cache, not in repo
+*.safetensors
+*.gguf
+*.bin
+weights/
+checkpoints/

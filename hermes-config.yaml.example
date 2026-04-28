@@ -1,0 +1,100 @@
+# Hermes Agent config for local MLX inference server
+# Copy to ~/.hermes/config.yaml after installing Hermes
+#
+# Multi-tier routing (use with start_multi.sh):
+#   mini (0.8B)   → compression, titles, session search, subagents
+#   small (4B)    → main agent — 97.5% tool calling, fast prefill
+#   medium (9B)   → fallback when small fails on complex context
+#   large (27B)   → reserve for deep reasoning (manual /model)
+#   huge (35B)    → reserve for top-quality (manual /model)
+#
+# Recommended start: MODELS="mini:8810,small:8811,medium:8812" ./start_multi.sh
+
+# ── Main agent: huge (Qwen3.6-35B-A3B MoE) ──
+# Latest Qwen (Apr 2026). MoE with only 3B active params per token, so
+# generation is ~5x faster than dense 27B despite 35B total. SWE-bench 73.4%,
+# AIME 92.7%, GPQA 86.0%. Best balance of quality and per-turn latency.
+model:
+  provider: custom
+  base_url: "http://localhost:8800/v1"
+  model: "huge"
+  timeout: 300
+
+# ── Fallback: large (27B dense) ──
+# Used when huge fails or is overloaded. GPQA 85.5%, AIME 91.3%.
+fallback_model:
+  provider: custom
+  base_url: "http://localhost:8800/v1"
+  model: "large"
+  timeout: 300
+
+# ── Subagent delegation: small (4B) ──
+# Acceptable for narrow well-scoped subtasks. Don't use for synthesis.
+delegation:
+  provider: custom
+  base_url: "http://localhost:8800/v1"
+  model: "small"
+  api_key: "local"
+  max_concurrent_children: 3
+  max_spawn_depth: 1
+
+# ── Auxiliary tasks ──
+# Route ALL auxiliary tasks through our server so nothing falls back
+# to OpenAI/OpenRouter defaults (which would fail without API keys).
+auxiliary:
+  # Image/screenshot analysis → small (4B)
+  vision:
+    provider: custom
+    base_url: "http://localhost:8800/v1"
+    model: "small"
+    api_key: "local"
+    timeout: 60
+
+  # Context compression → mini (0.8B, ~160 tok/s)
+  compression:
+    provider: custom
+    base_url: "http://localhost:8800/v1"
+    model: "mini"
+    api_key: "local"
+    timeout: 60
+
+  # Web content extraction → small (4B)
+  web_extract:
+    provider: custom
+    base_url: "http://localhost:8800/v1"
+    model: "small"
+    api_key: "local"
+    timeout: 60
+
+  # Session search/recall → mini (0.8B)
+  session_search:
+    provider: custom
+    base_url: "http://localhost:8800/v1"
+    model: "mini"
+    api_key: "local"
+    timeout: 30
+
+# ── Context compression ──
+# Compress at 40% (not the 50% default). On local hardware, prefill of long
+# context dominates per-turn latency, so triggering compression earlier keeps
+# the rolling context shorter and turns faster.
+compression:
+  enabled: true
+  threshold: 0.40
+  target_ratio: 0.20
+  protect_last_n: 20
+
+# ── Terminal ──
+terminal:
+  backend: "local"
+
+# ── Memory ──
+memory:
+  memory_enabled: true
+  memory_char_limit: 2200
+
+# ── Agent behavior ──
+agent:
+  max_turns: 30                  # cap death-loops; was 90
+  reasoning_effort: "medium"
+  tool_preview_length: 1500      # truncate verbose tool outputs in the activity feed
