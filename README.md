@@ -154,6 +154,41 @@ Anything OpenAI-compatible works. Set `base_url` to `http://localhost:8800/v1` a
 
 ---
 
+## How this compares to other Apple Silicon inference servers
+
+Several open-source projects already do local MLX inference. Quick honest comparison so you can pick the right one:
+
+### [oMLX](https://github.com/jundot/omlx) — feature-rich, paged SSD KV cache
+
+oMLX is a more sophisticated server: paged SSD KV caching (KV blocks persist to disk and survive restarts), continuous batching, native macOS menu-bar app, admin web UI, support for VLMs / OCR / embeddings / rerankers. Apache 2.0, actively maintained.
+
+We measured both head-to-head (M1 Max, Qwen3.5-9B, fresh state). The two cache strategies optimize for different workloads:
+
+| Workload | this server | oMLX |
+|---|---|---|
+| Multi-turn agent loop, growing context (Hermes-shape) | **5× speedup** on cached turns | no per-turn improvement |
+| Identical long prompt repeated (best-of-N shape) | no cache | **3.6× speedup** on repeats |
+| Tool calling on Qwen3.5 | works, lean SSE output | works, more verbose SSE output |
+| Tool calling on Qwen3.6 | **works** | **broken** — emits 0 `tool_calls` chunks (parser doesn't handle `qwen3_coder` format yet) |
+| VLM / OCR / embeddings | not supported | supported |
+| Persistent cache across restarts | no | yes (SSD-paged) |
+
+**Use this server if** you're running Hermes-style agent loops with stable system prompts, want multi-tier semantic routing (`mini`/`small`/`medium`/`large`/`huge`) baked in, and need Qwen3.6 tool calling to work reliably.
+
+**Use oMLX if** you do a lot of best-of-N evaluation, batch RAG with identical retrieved-chunk prefixes, need VLM/OCR/embedding support, want persistent cache across restarts, or prefer a more polished GUI.
+
+**Use both** if you have a workload that mixes these patterns — e.g. an outer GEPA optimization loop (best-of-N shape) wrapping inner agent runs (Hermes-shape). A small routing proxy in front of both can pick per-request which backend's cache will land. We use that pattern for an upcoming simulator project; the recipe is in the sandbox repo.
+
+### [vllm-metal](https://github.com/vllm-project/vllm-metal) and [vllm-mlx](https://github.com/waybarrios/vllm-mlx)
+
+Two paths to vLLM on Apple Silicon. Strong on continuous batching at high concurrency. As of April 2026, vllm-metal disables automatic prefix caching for hybrid Mamba/GatedDeltaNet models (Qwen3.5/3.6 are hybrids), which is the single biggest server-side optimization for agent loops. Worth tracking — when that lands, vllm-metal becomes a serious alternative for production.
+
+### [Ollama](https://ollama.com), [llama.cpp](https://github.com/ggml-org/llama.cpp), [mlx_lm.server](https://github.com/ml-explore/mlx-lm)
+
+Single-model servers. Mature, fast, well-tested. Right answer if you only need one model behind one endpoint. Don't support multi-tier dynamic loading — to serve five tiers you'd run five processes plus your own router.
+
+---
+
 ## License & contributions
 
 [See LICENSE]. PRs welcome — particularly for support of newer Qwen releases, additional MLX tool parsers, and benchmarks on different Apple Silicon variants.

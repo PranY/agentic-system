@@ -38,6 +38,9 @@ mlx_parallelism_issue.md
 post.md
 linkedin_post.md
 
+# Internal evaluation reports (contains local paths)
+omlx_comparison.md
+
 # Logs and temp output
 *.log
 /tmp/
