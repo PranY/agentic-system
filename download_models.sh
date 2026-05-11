@@ -11,14 +11,33 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
+# Load HF_TOKEN from .env (or the user's existing HF cli login) so HF Hub
+# requests are authenticated — unauthenticated rate limits cap downloads to
+# ~3-5 MB/s. Authenticated users get ~10x higher caps.
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+if [ -z "${HF_TOKEN:-}" ] && [ -f "$HOME/.cache/huggingface/token" ]; then
+    HF_TOKEN="$(cat "$HOME/.cache/huggingface/token")"
+    export HF_TOKEN
+fi
+if [ -n "${HF_TOKEN:-}" ]; then
+    echo "  HF_TOKEN set — using authenticated downloads"
+else
+    echo "  WARNING: no HF_TOKEN — downloads will be rate-limited"
+fi
+
 # All target models + DFlash draft models
 MODELS=(
     # Target models (5 tiers)
     "mlx-community/Qwen3.5-0.8B-MLX-4bit"
     "mlx-community/Qwen3.5-4B-MLX-4bit"
     "mlx-community/Qwen3.5-9B-MLX-4bit"
-    "mlx-community/Qwen3.5-27B-4bit"
-    "mlx-community/Qwen3.6-35B-A3B-4bit"
+    "mlx-community/Qwen3.6-27B-4bit"
+    "mlx-community/Qwen3.6-35B-A3B-4bit-DWQ"
     # DFlash draft models
     "z-lab/Qwen3.5-4B-DFlash"
     "z-lab/Qwen3.5-9B-DFlash"

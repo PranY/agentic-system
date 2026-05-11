@@ -24,8 +24,8 @@ Five Qwen tiers spanning 0.8B to 35B parameters. All emit OpenAI-compatible tool
 | `mini` | Qwen3.5-0.8B-MLX-4bit | 0.5 GB | Routing, titles, classification, ultra-fast subagents |
 | `small` | Qwen3.5-4B-MLX-4bit | 2.5 GB | Fast tool calling (97.5% accuracy), web extract, vision |
 | `medium` | Qwen3.5-9B-MLX-4bit | 5.5 GB | Agentic workhorse, MMLU-Pro 82.5 |
-| `large` | Qwen3.5-27B-4bit | 14 GB | Deep reasoning. GPQA 85.5, AIME 91.3. **Best output quality without placeholder hallucination** — use as default for synthesis-heavy work |
-| `huge` | Qwen3.6-35B-A3B-4bit | 20 GB | Latest Qwen (Apr 2026). SWE-bench 73.4, AIME 92.7. MoE — 3B active despite 35B total |
+| `large` | Qwen3.6-27B-4bit | 16 GB | Deep reasoning. Terminal-Bench 2.0 59.3, SWE-bench Verified 77.2, AIME 2026 94.1, GPQA 87.8. **Best output quality without placeholder hallucination** — use as default for synthesis-heavy work |
+| `huge` | Qwen3.6-35B-A3B-4bit-DWQ | 21 GB | Latest Qwen (Apr 2026), DWQ-calibrated to avoid multi-turn tool-call drift. SWE-bench 73.4, AIME 92.7. MoE — 3B active despite 35B total |
 
 All models: 262K native context, thinking/non-thinking dual mode, Gated DeltaNet + attention hybrid architecture, `qwen3_5` / `qwen3_coder` tool parser.
 
@@ -244,7 +244,8 @@ analysis = ask("large", "Analyze: microservices vs monolith for 5-person team")
 | `route_proxy.py` | Routing proxy for multi-instance mode — unifies several backends behind one port |
 | `setup.sh` | One-time install |
 | `start.sh` | Start single-process server (auto-preloads `large` by default) |
-| `start_multi.sh` | Multi-process mode: one server per tier + routing proxy on 8800 |
+| `start_multi.sh` | Multi-process mode in foreground: one server per tier + routing proxy |
+| `start_tmux.sh` | Same as `start_multi.sh` but inside a tmux session, one pane per backend |
 | `download_models.sh` | Pre-download all models (idempotent, IPv4-forced) |
 | `hermes-config.yaml.example` | Drop-in template for Hermes Agent (copy to `~/.hermes/config.yaml`) |
 
@@ -329,28 +330,38 @@ Default-path cost is unchanged — when `return_logprobs` is false (default), no
 
 ### Multi-process mode + routing proxy
 
-For workloads that benefit from true GPU parallelism between models, `start_multi.sh` runs each tier as a separate process and launches `route_proxy.py` on port 8800 to give clients a single endpoint:
+For workloads that benefit from true GPU parallelism between models, run each tier as its own process behind a routing proxy. Two ways to launch.
+
+**One command, tmux session, live output per pane (recommended):**
 
 ```bash
-# Default: mini + small as separate processes
-./start_multi.sh
-
-# Custom mix
-MODELS="mini:8810,small:8811,medium:8812" ./start_multi.sh
-
-# Override the unified endpoint port
-PROXY_PORT=9000 ./start_multi.sh
+./start_tmux.sh                                     # default: mini + small
+MODELS="mini:8810,small:8811,medium:8812" ./start_tmux.sh
+PROXY_PORT=9000 ./start_tmux.sh                     # different proxy port
+./start_tmux.sh --detach                            # don't auto-attach
+./start_tmux.sh --kill                              # tear down
 ```
 
-What gets started:
+Creates a tmux session named `mlx-multi` with one vertical pane per model + one for the routing proxy. Detach with `Ctrl-b d`, reattach with `tmux attach -t mlx-multi`. You see each backend's stdout in its own pane.
+
+**One command, all logs to files (no tmux):**
+
+```bash
+./start_multi.sh                                    # foreground; stdout merged
+MODELS="mini:8810,small:8811,medium:8812" ./start_multi.sh
+```
+
+Logs land in `/tmp/mlx_multi/{tier}_{port}.log` and `/tmp/mlx_multi/proxy_{port}.log`. Use this for headless / supervised runs.
+
+**What both launch:**
+
 - One `serve.py` process per `tier:port` pair, with the model preloaded
 - One `route_proxy.py` on `PROXY_PORT` (default 8800) that:
   - Routes `POST /v1/chat/completions` by `model` field (resolves aliases like `gpt-4o-mini`)
   - Aggregates `GET /v1/models`, `/v1/models/catalog`, `/health`, `/stats`
   - Forwards everything else to the first backend
-- Per-process logs at `/tmp/mlx_multi/{tier}_{port}.log` and `/tmp/mlx_multi/proxy_{port}.log`
 
-When this beats single-process: mixed `mini`+`small` traffic at high concurrency, or any setup where multiple models need to generate concurrently. ~25% aggregate throughput win on 20 mixed requests at concurrency 4. For medium/large tier workloads where a single request saturates the GPU, single-process (`./start.sh`) is simpler.
+**When this beats single-process**: mixed `mini`+`small` traffic at high concurrency, or any setup where multiple models need to generate concurrently. ~25% aggregate throughput win on 20 mixed requests at concurrency 4. For medium/large tier workloads where a single request saturates the GPU, single-process (`./start.sh`) is simpler.
 
 ### Integrating with [Hermes Agent](https://hermes-agent.nousresearch.com/)
 

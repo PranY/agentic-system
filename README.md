@@ -66,8 +66,8 @@ curl http://localhost:8800/v1/chat/completions \
 | `mini` | Qwen3.5-0.8B (4-bit) | 0.5 GB | Routing, classification, ultra-fast subagents, conversation titles |
 | `small` | Qwen3.5-4B (4-bit) | 2.5 GB | Fast tool calling (97.5% accuracy), web extract, vision |
 | `medium` | Qwen3.5-9B (4-bit) | 5.5 GB | Agentic workhorse, MMLU-Pro 82.5 |
-| `large` | Qwen3.5-27B (4-bit) | 14 GB | **Default for synthesis-heavy work.** GPQA 85.5, AIME 91.3 |
-| `huge` | Qwen3.6-35B-A3B (4-bit) | 20 GB | Latest Qwen (Apr 2026). SWE-bench 73.4. MoE — 3B active |
+| `large` | Qwen3.6-27B (4-bit) | 16 GB | **Default for synthesis-heavy work.** Terminal-Bench 2.0 59.3, SWE-bench Verified 77.2, AIME 2026 94.1, GPQA 87.8 |
+| `huge` | Qwen3.6-35B-A3B (4-bit, DWQ) | 21 GB | Latest Qwen (Apr 2026), DWQ-calibrated to avoid multi-turn tool-call drift in flat MoE quants. SWE-bench 73.4. MoE — 3B active |
 
 Models load on-demand and unload after 15 minutes idle. The catalog is in [`select_models.py`](select_models.py).
 
@@ -96,8 +96,8 @@ cp hermes-SOUL.md.example ~/.hermes/SOUL.md
 ```
 
 The config maps Hermes's roles to local tiers:
-- **Main agent** → `huge` (Qwen3.6-35B-A3B MoE) — fast generation despite size, since only 3B params are active per token
-- **Fallback** → `large` (Qwen3.5-27B dense) — for cases where huge gets stuck
+- **Main agent** → `huge` (Qwen3.6-35B-A3B MoE, DWQ) — fast generation despite size, since only 3B params are active per token
+- **Fallback** → `large` (Qwen3.6-27B dense) — for cases where huge gets stuck
 - **Subagent delegation** → `small` (4B) — fast for narrow scoped subtasks
 - **Auxiliary** (titles, compression, vision, web extract, session search) → `mini` or `small`
 
